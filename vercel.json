@@ -1,9 +1,14 @@
 {
     "version": 2,
     "builds": [
-        {"src": "app.py", "use": "@vercel/python"}
+        {"src": "app.py", "use": "@vercel/python", "config": {
+        "includeFiles": ["requirements.txt"]
+      }}
     ],
     "routes": [
         {"src": "/(.*)", "dest": "app.py"}
-    ]
+    ],
+    "env": {
+        "PATH": "/usr/bin/ffmpeg:$PATH"
+    }
 }
