@@ -35,8 +35,9 @@ def get_most_replayed_time(id):
         return "00:00:00"
 
 def cut_and_crop_video(input_path, output_path, start_time, duration, width, height):
+    ffmpeg_path = os.getenv('FFMPEG_PATH', 'ffmpeg')
     command = [
-        'ffmpeg',
+        ffmpeg_path,
         '-y',
         '-i', input_path,
         '-ss', start_time,
