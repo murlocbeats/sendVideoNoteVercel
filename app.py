@@ -3,50 +3,36 @@ from pytube import YouTube
 import ffmpeg
 import requests
 import subprocess
-import time
+import os
 
-# تعریف برنامه Flask
 app = Flask(__name__)
 
 def get_most_replayed_time(id):
     try:
-        # URL API با آیدی ویدیو
         api_url = f'https://yt.lemnoslife.com/videos?part=mostReplayed&id={id}'
-    
-        # ارسال درخواست به API
         response = requests.get(api_url)
-    
-        # بررسی وضعیت درخواست
         if response.status_code != 200:
             raise Exception(f"API request failed with status code {response.status_code}")
-    
+
         data = response.json()
-    
-        # استخراج داده‌های 'mostReplayed' از جیسون
         markers = data['items'][0]['mostReplayed']['markers']
-    
-        # پیدا کردن بیشترین intensityScoreNormalized از ثانیه 6 به بعد
+
         max_intensity = 0
         max_start_millis = 0
-    
         for marker in markers:
             if marker['startMillis'] >= 6000 and marker['startMillis'] <= 45000 and marker['intensityScoreNormalized'] > max_intensity:
                 max_intensity = marker['intensityScoreNormalized']
                 max_start_millis = marker['startMillis']
-    
-        # تبدیل startMillis به فرمت HH:MM:SS
+
         seconds = max_start_millis // 1000
         minutes = seconds // 60
         hours = minutes // 60
         formatted_time = f"{int(hours):02}:{int(minutes % 60):02}:{int(seconds % 60):02}"
-    
+
         return formatted_time
     except Exception as e:
         print(f"Error occurred while fetching the most replayed time: {e}")
-        # مقدار پیش‌فرض در صورت بروز خطا
         return "00:00:00"
-
-
 
 def cut_and_crop_video(input_path, output_path, start_time, duration, width, height):
     command = [
@@ -61,53 +47,40 @@ def cut_and_crop_video(input_path, output_path, start_time, duration, width, hei
     ]
     subprocess.run(command)
 
-
-def sendVideoNote():
-    # اطلاعات ربات و چت آیدی
+def send_video_note_to_telegram(video_path):
     bot_token = '7069807990:AAGudnd8tpTMBfQ_I_6F9nBb26hxz-KZR8E'
     chat_id = '@proxy_tunes'
     
-    # فایل ویدیو برای ارسال
-    files = {'video_note': open('final_video_with_audio.mp4', 'rb')}
-    
-    # ارسال درخواست POST به API تلگرام
-    response = requests.post(f'https://api.telegram.org/bot{bot_token}/sendVideoNote', data={'chat_id': chat_id}, files=files)
-    
-    # بررسی پاسخ سرور
-    if response.status_code == 200:
-        print('Video sent successfully!')
-    else:
-        print(f'Failed to send video. Status code: {response.status_code}')
-
+    with open(video_path, 'rb') as video_file:
+        files = {'video_note': video_file}
+        response = requests.post(f'https://api.telegram.org/bot{bot_token}/sendVideoNote', data={'chat_id': chat_id}, files=files)
+        if response.status_code == 200:
+            print('Video sent successfully!')
+        else:
+            print(f'Failed to send video. Status code: {response.status_code}')
 
 def main(id):
-    # فراخوانی تابع و دریافت زمان پربازدید
     most_replayed_time = get_most_replayed_time(id)
     print(f"Most replayed time: {most_replayed_time}")
 
-    time.sleep(2)
-
-    # ویدیو را دانلود کنید
     yt = YouTube('https://www.youtube.com/watch?v=' + id)
     stream = yt.streams.filter(file_extension='mp4').first()
-    stream.download(filename='downloaded_video.mp4')
+    download_path = '/tmp/downloaded_video.mp4'
+    stream.download(filename=download_path)
 
-    cut_start_time = most_replayed_time  # زمان شروع برش به فرمت HH:MM:SS
-    cut_duration = '00:01:00'  # مدت زمان برش به فرمت HH:MM:SS
+    cut_start_time = most_replayed_time
+    cut_duration = '00:01:00'
     crop_width = 360
     crop_height = 360
-    cropped_video_path = 'final_video_with_audio.mp4'
+    cropped_video_path = '/tmp/final_video_with_audio.mp4'
 
-    cut_and_crop_video('downloaded_video.mp4', cropped_video_path, cut_start_time, cut_duration, crop_width, crop_height)
-
-    # ارسال ویدیو به تلگرام
-    sendVideoNote()
+    cut_and_crop_video(download_path, cropped_video_path, cut_start_time, cut_duration, crop_width, crop_height)
+    send_video_note_to_telegram(cropped_video_path)
 
 @app.route('/')
 def hi():
     return 'Hi'
 
-# تعریف مسیر API برای دریافت URL
 @app.route('/process_video', methods=['POST'])
 def process_video():
     try:
@@ -119,6 +92,6 @@ def process_video():
         return jsonify({'status': 'success', 'message': 'Video processed and sent to Telegram'}), 200
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
-# اجرای برنامه Flask
+
 if __name__ == '__main__':
     app.run(debug=True)
